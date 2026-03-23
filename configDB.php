@@ -11,7 +11,7 @@ try {
         PDO::ATTR_EMULATE_PREPARES   => false,                  
     ]);
 
-    echo "Connexió exitosa";
+   // echo "Connexió exitosa";
 
 } catch (PDOException $e) {
     
