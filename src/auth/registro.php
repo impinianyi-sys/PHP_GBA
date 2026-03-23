@@ -1,11 +1,11 @@
 <?php
-// registro.php
+
 require_once '../../configDB.php'; 
 
 session_start();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Recollim dades fent servir els 'name' del teu HTML
+    
     $nom_usuari = $_POST['nombre'] ?? '';
     $email = $_POST['email'] ?? '';
     $contrasenya = $_POST['contraseña'] ?? '';
@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $errors = [];
 
-    // Validacions segons apunts [cite: 1141, 1148]
+
     if (strlen($nom_usuari) < 3) {
         $errors[] = "El nom d'usuari ha de tenir mínim 3 caràcters";
     }
@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = "Les contrasenyes no coincideixen";
     }
 
-    // Comprovar si l'usuari existeix a la taula 'usuarios' [cite: 1166]
+
     if (empty($errors)) {
         $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE nombre = ? OR email = ?");
         $stmt->execute([$nom_usuari, $email]);
@@ -36,16 +36,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Inserció a la base de dades [cite: 1179, 1182]
+
     if (empty($errors)) {
-        // Hash de seguretat [cite: 1176, 2758]
+
         $hash_contrasenya = password_hash($contrasenya, PASSWORD_DEFAULT);
 
-        // ATENCIÓ: Taula 'usuarios' i columnes 'nombre', 'email', 'contraseña', 'rol'
         $stmt = $pdo->prepare("INSERT INTO usuarios (nombre, email, contraseña, rol) VALUES (?, ?, ?, ?)");
         
         if ($stmt->execute([$nom_usuari, $email, $hash_contrasenya, 'usuario'])) {
-            $_SESSION['missatge'] = "Registre exitós!";
+            session_unset();
+            session_destroy();
+            session_start();
+
+            $_SESSION['missatge'] = "Registre exitós! Ja pots iniciar sessió";
             header('Location: login.php');
             exit;
         } else {
