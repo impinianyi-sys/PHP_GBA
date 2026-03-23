@@ -63,5 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
 
     <p>No tens compte? <a href="registro.php">Registra't</a></p>
+    <p><a href="recuperarPass.php">He oblidat la contrasenya</a></p> 
 </body>
 </html>
