@@ -1,44 +1,34 @@
 <?php
-require_once '../../configDB.php'; 
-
+require_once '../../configDB.php';
 session_start();
 
+$error = "";
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nom_usuari = $_POST['nombre'] ?? '';
+    $nom_complet = $_POST['nom_complet'] ?? '';
     $email = $_POST['email'] ?? '';
-    $contrasenya = $_POST['contraseña'] ?? '';
-    $confirmar_contrasenya = $_POST['confirmar_contraseña'] ?? '';
+    $pass = $_POST['contrasenya'] ?? '';
+    $pass_confirm = $_POST['confirmar_contrasenya'] ?? '';
 
-    $errors = [];
-
-    if (strlen($nom_usuari) < 3) $errors[] = "El nom ha de tenir mínim 3 caràcters";
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Email no vàlid";
-    if (strlen($contrasenya) < 8) $errors[] = "La contrasenya ha de tenir mínim 8 caràcters";
-    if ($contrasenya !== $confirmar_contrasenya) $errors[] = "Les contrasenyes no coincideixen";
-
-    if (empty($errors)) {
-        $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE nombre = ? OR email = ?");
-        $stmt->execute([$nom_usuari, $email]);
-        if ($stmt->fetch()) {
-            $errors[] = "L'usuari o email ja existeix";
-        }
-    }
-
-    if (empty($errors)) {
-        $hash_contrasenya = password_hash($contrasenya, PASSWORD_DEFAULT);
-
-        $stmt = $pdo->prepare("INSERT INTO usuarios (nombre, email, contraseña, rol) VALUES (?, ?, ?, ?)");
+    if ($pass !== $pass_confirm) {
+        $error = "Les contrasenyes no coincideixen.";
+    } else {
+        $pass_hash = password_hash($pass, PASSWORD_DEFAULT);
         
-        if ($stmt->execute([$nom_usuari, $email, $hash_contrasenya, 'cliente'])) {
-            session_unset();
-            session_destroy();
-            session_start();
-
-            $_SESSION['missatge'] = "Compte creat amb èxit!";
-            header('Location: login.php');
-            exit;
-        } else {
-            $errors[] = "Error en crear el compte";
+        try {
+            $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE email = ? OR nombre = ?");
+            $stmt->execute([$email, $nom_complet]);
+            
+            if ($stmt->fetch()) {
+                $error = "Aquest correu o usuari ja està registrat.";
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO usuarios (nombre, email, contraseña, rol) VALUES (?, ?, ?, 'cliente')");
+                $stmt->execute([$nom_complet, $email, $pass_hash]);
+                header('Location: login.php?registro=success');
+                exit;
+            }
+        } catch (PDOException $e) {
+            $error = "Error en el sistema. Intenta-ho més tard.";
         }
     }
 }
@@ -49,197 +39,155 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registre - Bufet GBA</title>
+    <title>GBA ADVOS | Registre Premium</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --granate: #800020;
-            --granate-light: #a52a2a;
-            --white: #ffffff;
-            --gray-light: #f4f4f4;
-            --text-dark: #333;
+            --azul-porsche: #004a99;
+            --negro-puro: #000000;
+            --blanco: #ffffff;
+            --rojo: #ff4d4d;
         }
 
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, var(--gray-light) 0%, #e0e0e0 100%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--negro-puro);
+            height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden; position: relative;
+        }
+
+        .background-image {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop');
+            background-size: cover; background-position: center;
+            filter: brightness(0.2); z-index: -1;
         }
 
         .register-card {
-            background: var(--white);
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 450px;
-            border-top: 5px solid var(--granate);
-        }
-
-        h1 {
-            color: var(--granate);
+            background: rgba(15, 15, 15, 0.9);
+            backdrop-filter: blur(25px);
+            padding: 40px 50px;
+            width: 100%; max-width: 480px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 40px 100px rgba(0,0,0,0.8);
             text-align: center;
-            margin-bottom: 1.5rem;
-            font-size: 1.6rem;
         }
 
-        .form-group {
-            margin-bottom: 1rem;
-        }
+        .logo { font-size: 1.3rem; font-weight: 700; letter-spacing: 6px; color: var(--blanco); margin-bottom: 30px; text-transform: uppercase; }
 
-        label {
-            display: block;
-            margin-bottom: 0.4rem;
-            color: var(--text-dark);
-            font-weight: 600;
-            font-size: 0.9rem;
-        }
+        .input-box { margin-bottom: 25px; text-align: left; position: relative; }
+
+        label { display: block; font-size: 0.65rem; color: var(--blanco); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; font-weight: 600; }
 
         input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            box-sizing: border-box;
-            transition: all 0.3s;
+            width: 100%; background: transparent; border: none; border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 0; color: var(--blanco); font-size: 0.95rem; outline: none; transition: border-color 0.4s;
         }
 
-        input:focus {
-            outline: none;
-            border-color: var(--granate);
-            box-shadow: 0 0 5px rgba(128, 0, 32, 0.2);
+        input:focus { border-bottom: 1px solid var(--azul-porsche); }
+
+        /* --- TOOLTIP HOVER --- */
+        .input-box::after {
+            content: attr(data-hint);
+            position: absolute;
+            top: -25px;
+            right: 0;
+            font-size: 0.65rem;
+            color: var(--azul-porsche);
+            font-weight: 700;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform: translateY(5px);
+            pointer-events: none;
+            text-transform: none;
         }
+
+        .input-box:hover::after {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* --- STRENGTH BAR --- */
+        .strength-bar-container { width: 100%; height: 3px; background: rgba(255, 255, 255, 0.1); margin-top: 8px; }
+        .strength-bar { height: 100%; width: 0%; transition: all 0.4s ease; }
 
         .btn-submit {
-            width: 100%;
-            background-color: var(--granate);
-            color: white;
-            padding: 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.3s;
-            margin-top: 1rem;
+            width: 100%; padding: 15px; background: var(--blanco); color: var(--negro-puro); border: none;
+            font-weight: 700; text-transform: uppercase; letter-spacing: 3px; cursor: pointer; transition: all 0.3s ease; margin-top: 20px;
         }
 
-        .btn-submit:hover {
-            background-color: var(--granate-light);
-            transform: translateY(-1px);
-        }
+        .btn-submit:hover { background: var(--azul-porsche); color: var(--blanco); }
 
-        .alert-error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 1rem;
-            font-size: 0.85rem;
-            border: 1px solid #f5c6cb;
-        }
+        .links { margin-top: 25px; font-size: 0.75rem; }
+        .links a { color: rgba(255, 255, 255, 0.5); text-decoration: none; transition: color 0.3s; }
+        .links a:hover { color: var(--blanco); }
 
-        .links {
-            margin-top: 1.5rem;
-            text-align: center;
-            font-size: 0.9rem;
-        }
-
-        .links a {
-            color: var(--granate);
-            text-decoration: none;
-            font-weight: bold;
-        }
-
-        .links a:hover { text-decoration: underline; }
-
-        .password-strength {
-            height: 5px;
-            width: 100%;
-            background: #eee;
-            margin-top: 5px;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        #strength-bar {
-            height: 100%;
-            width: 0%;
-            transition: width 0.3s, background 0.3s;
-        }
+        .error-msg { color: var(--rojo); font-size: 0.8rem; margin-bottom: 15px; font-weight: 600; text-align: left; }
     </style>
 </head>
 <body>
 
-    <div class="register-card">
-        <h1>Crear compte GBA</h1>
+    <div class="background-image"></div>
 
-        <?php if (!empty($errors)): ?>
-            <div class="alert-error">
-                <?php foreach ($errors as $error): ?>
-                    <div style="margin-bottom: 5px;">• <?= htmlspecialchars($error) ?></div>
-                <?php endforeach; ?>
-            </div>
+    <div class="register-card">
+        <div class="logo">GBA<span>.</span>ADVOS</div>
+
+        <?php if ($error !== ""): ?>
+            <p class="error-msg">✕ <?= $error ?></p>
         <?php endif; ?>
 
-        <form method="POST" id="registerForm">
-            <div class="form-group">
-                <label>Nom complet:</label>
-                <input type="text" name="nombre" placeholder="Ex: Joan Garcia" required>
+        <form method="POST" id="regForm">
+            <div class="input-box" data-hint="ex: Agustin Martinez">
+                <label>Nom Complet</label>
+                <input type="text" name="nom_complet" required autocomplete="off">
             </div>
 
-            <div class="form-group">
-                <label>Email personal:</label>
-                <input type="email" name="email" placeholder="correu@exemple.com" required>
+            <div class="input-box" data-hint="ex: hola@gmail.com">
+                <label>Correu Electrònic</label>
+                <input type="email" name="email" required autocomplete="off">
             </div>
 
-            <div class="form-group">
-                <label>Contrasenya:</label>
-                <input type="password" name="contraseña" id="passInput" required>
-                <div class="password-strength"><div id="strength-bar"></div></div>
+            <div class="input-box">
+                <label>Contrasenya</label>
+                <input type="password" name="contrasenya" id="passInput" required>
+                <div class="strength-bar-container">
+                    <div class="strength-bar" id="strengthBar"></div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>Confirmar contrasenya:</label>
-                <input type="password" name="confirmar_contraseña" required>
+            <div class="input-box">
+                <label>Confirmar Contrasenya</label>
+                <input type="password" name="confirmar_contrasenya" required>
             </div>
 
-            <button type="submit" class="btn-submit">REGISTRAR-SE</button>
+            <button type="submit" class="btn-submit">Registrar</button>
         </form>
 
         <div class="links">
-            <p>Ja tens compte? <a href="login.php">Inicia sessió</a></p>
+            <a href="login.php">Ja tens compte? Inicia Sessió</a>
         </div>
     </div>
 
     <script>
         const passInput = document.getElementById('passInput');
-        const strengthBar = document.getElementById('strength-bar');
+        const strengthBar = document.getElementById('strengthBar');
 
         passInput.addEventListener('input', () => {
             const val = passInput.value;
-            let width = 0;
-            let color = '#eee';
+            let strength = 0;
+            if (val.length > 5) strength += 33;
+            if (val.match(/[A-Z]/) && val.match(/[0-9]/)) strength += 33;
+            if (val.match(/[^A-Za-z0-9]/)) strength += 34;
 
-            if (val.length > 0) width = 25;
-            if (val.length >= 8) {
-                width = 100;
-                color = '#27ae60'; // Verd si compleix el mínim
-            } else if (val.length > 4) {
-                width = 50;
-                color = '#f1c40f'; // Groc si és curta
-            } else {
-                color = '#e74c3c'; // Vermell si és molt curta
-            }
-
-            strengthBar.style.width = width + '%';
-            strengthBar.style.background = color;
+            strengthBar.style.width = strength + '%';
+            if (strength <= 33) strengthBar.style.backgroundColor = '#ff4d4d';
+            else if (strength <= 66) strengthBar.style.backgroundColor = '#ffcc00';
+            else strengthBar.style.backgroundColor = '#00cc66';
+            if(val.length === 0) strengthBar.style.width = '0%';
         });
     </script>
-
 </body>
 </html>

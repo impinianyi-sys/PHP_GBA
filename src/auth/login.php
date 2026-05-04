@@ -24,10 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: dashboard.php');
             exit;
         } else {
-            $error = "Usuari o contrasenya incorrectes";
+            $error = "Accés denegat. Credencials incorrectes.";
         }
-    } else {
-        $error = "Emplena tots els camps";
     }
 }
 ?>
@@ -37,155 +35,167 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Bufet GBA</title>
+    <title>GBA ADVOS | Accés Premium</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --granate: #800020;
-            --granate-light: #a52a2a;
-            --white: #ffffff;
-            --gray-light: #f4f4f4;
-            --text-dark: #333;
+            --azul-porsche: #004a99;
+            --negro-puro: #000000;
+            --blanco: #ffffff;
         }
 
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, var(--gray-light) 0%, #e0e0e0 100%);
+            font-family: 'Inter', sans-serif;
+            background-color: var(--negro-puro);
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            margin: 0;
+            overflow: hidden;
+            position: relative;
         }
 
-        .login-card {
-            background: var(--white);
-            padding: 2.5rem;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        /* IMAGEN DE FONDO JURÍDICA */
+        .background-image {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
-            max-width: 400px;
-            border-top: 5px solid var(--granate);
+            height: 100%;
+            /* Imagen de abogados en juicio / despacho */
+            background-image: url('https://images.unsplash.com/photo-1505664194779-8beaceb93744?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            filter: brightness(0.25) contrast(1.1); /* Oscurecemos para el estilo Porsche */
+            z-index: -1;
         }
 
-        h1 {
-            color: var(--granate);
+        /* CONTENEDOR LOGIN */
+        .login-card {
+            background: rgba(15, 15, 15, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 60px;
+            width: 100%;
+            max-width: 420px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 40px 100px rgba(0,0,0,0.8);
             text-align: center;
-            margin-bottom: 1.5rem;
-            font-size: 1.8rem;
         }
 
-        .form-group {
-            margin-bottom: 1.2rem;
+        .logo {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 8px;
+            color: var(--blanco);
+            margin-bottom: 50px;
+            text-transform: uppercase;
         }
 
+        .logo span { color: var(--azul-porsche); }
+
+        .input-box {
+            margin-bottom: 35px;
+            text-align: left;
+        }
+
+        /* TEXTO EN BLANCO PARA ETIQUETAS */
         label {
             display: block;
-            margin-bottom: 0.5rem;
-            color: var(--text-dark);
+            font-size: 0.7rem;
+            color: var(--blanco); 
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 12px;
             font-weight: 600;
         }
 
+        /* TEXTO EN BLANCO PARA INPUTS */
         input {
             width: 100%;
-            padding: 12px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            box-sizing: border-box;
-            transition: border-color 0.3s;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 0;
+            color: var(--blanco);
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.4s;
         }
 
         input:focus {
-            outline: none;
-            border-color: var(--granate);
+            border-bottom: 2px solid var(--azul-porsche);
         }
 
         .btn-submit {
             width: 100%;
-            background-color: var(--granate);
-            color: white;
-            padding: 12px;
+            padding: 18px;
+            background: var(--blanco);
+            color: var(--negro-puro);
             border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: bold;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 4px;
             cursor: pointer;
-            transition: background 0.3s;
-            margin-top: 1rem;
+            transition: all 0.3s ease;
+            margin-top: 15px;
         }
 
         .btn-submit:hover {
-            background-color: var(--granate-light);
+            background: var(--azul-porsche);
+            color: var(--blanco);
         }
-
-        .alert {
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-            font-size: 0.9rem;
-            text-align: center;
-        }
-
-        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
 
         .links {
-            margin-top: 1.5rem;
-            text-align: center;
-            font-size: 0.9rem;
+            margin-top: 35px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
         }
 
         .links a {
-            color: var(--granate);
+            color: rgba(255, 255, 255, 0.5);
             text-decoration: none;
+            transition: color 0.3s;
         }
 
-        .links a:hover { text-decoration: underline; }
+        .links a:hover { color: var(--blanco); }
+
+        .error { color: #ff4d4d; font-size: 0.85rem; margin-bottom: 20px; font-weight: 600; }
     </style>
 </head>
 <body>
 
+    <div class="background-image"></div>
+
     <div class="login-card">
-        <h1>Bufet GBA</h1>
+        <div class="logo">GBA<span>.</span>ADVOS</div>
 
         <?php if (isset($error)): ?>
-            <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
+            <p class="error"><?= $error ?></p>
         <?php endif; ?>
 
-        <?php if (isset($_SESSION['missatge'])): ?>
-            <div class="alert alert-success">
-                <?= htmlspecialchars($_SESSION['missatge']) ?>
-                <?php unset($_SESSION['missatge']); ?>
-            </div>
-        <?php endif; ?>
-
-        <form method="POST" id="loginForm">
-            <div class="form-group">
-                <label>Nom d'usuari:</label>
-                <input type="text" name="nom_usuari" id="userInput" required>
+        <form method="POST">
+            <div class="input-box">
+                <label for="usuari">Usuari</label>
+                <input type="text" name="nom_usuari" id="usuari" required autofocus>
             </div>
 
-            <div class="form-group">
-                <label>Contrasenya:</label>
-                <input type="password" name="contrasenya" required>
+            <div class="input-box">
+                <label for="pass">Contrasenya</label>
+                <input type="password" name="contrasenya" id="pass" required>
             </div>
 
-            <button type="submit" class="btn-submit">ENTRAR</button>
+            <button type="submit" class="btn-submit">Accedir</button>
         </form>
 
         <div class="links">
-            <p>No tens compte? <a href="registro.php">Registra't</a></p>
-            <p><a href="recuperar_contrasenya.php">He oblidat la contrasenya</a></p>
+            <a href="registro.php">Registre</a>
+            <a href="#">Recuperar clau</a>
         </div>
     </div>
-
-    <script>
-        window.onload = function() {
-            const userInput = document.getElementById('userInput');
-            if (userInput.value === "") {
-                userInput.value = "cliente";
-            }
-        };
-    </script>
 
 </body>
 </html>
