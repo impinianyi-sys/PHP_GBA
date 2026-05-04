@@ -1,0 +1,1 @@
+Para poder hacer mi proyecto mas seguro implemente el certificado de SSL para que en vez de ser HTTP sea HTTPS y pueda mi pagina estar securizada.
