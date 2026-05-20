@@ -2,52 +2,56 @@
 session_start();
 require_once '../../configDB.php';
 
+// 1. FILTRO DE SEGURIDAD GENERAL
 if (!isset($_SESSION['usuari_id'])) {
     header('Location: login.php');
     exit;
 }
 
 $rol = $_SESSION['rol'];
-$nom = $_SESSION['nom_usuari'];
+$nom_usuari = $_SESSION['nom_usuari'];
 $user_id = $_SESSION['usuari_id'];
 
-$mis_casos = [];
-$todos_los_abogados = [];
+// Inicializamos contenedores de datos para evitar errores en el HTML
+$casos = [];
+$abogados = [];
+$clientes = [];
 
 try {
-    // 1. LÓGICA PARA ABOGADOS: Solo sus propios casos
-    if ($rol === 'abogado') {
-        $stmt = $pdo->prepare("SELECT c.*, u.nombre as cliente_nombre 
-                               FROM casos c 
-                               JOIN usuarios u ON c.cliente_id = u.id 
-                               WHERE c.abogado_id = ? 
-                               ORDER BY c.fecha_creacion DESC");
+    // ==================== LÓGICA DE EXTRACCIÓN DE DATOS SEGÚN EL ROL ====================
+    
+    if ($rol === 'admin') {
+        // El ADMIN lo ve todo: todos los casos y todos los abogados para poder borrarlos
+        $casos = $pdo->query("SELECT * FROM casos ORDER BY fecha_creacion DESC")->fetchAll(PDO::FETCH_ASSOC);
+        $abogados = $pdo->query("SELECT id, nombre, email FROM usuarios WHERE rol = 'abogado'")->fetchAll(PDO::FETCH_ASSOC);
+        
+    } elseif ($rol === 'abogado') {
+        // El ABOGADO solo ve sus casos y la lista de clientes registrados para su información
+        $stmt = $pdo->prepare("SELECT * FROM casos WHERE abogado_id = ? ORDER BY fecha_creacion DESC");
         $stmt->execute([$user_id]);
-        $mis_casos = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    // 2. LÓGICA PARA CLIENTES: Sus casos y el directorio de abogados
-    if ($rol === 'cliente') {
-        // Sus casos específicos
-        $stmt = $pdo->prepare("SELECT c.*, u.nombre as abogado_nombre 
-                               FROM casos c 
-                               JOIN usuarios u ON c.abogado_id = u.id 
-                               WHERE c.cliente_id = ? 
-                               ORDER BY c.fecha_creacion DESC");
+        $casos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $clientes = $pdo->query("SELECT id, nombre, email FROM usuarios WHERE rol = 'cliente'")->fetchAll(PDO::FETCH_ASSOC);
+        
+    } elseif ($rol === 'cliente') {
+        // El CLIENTE solo lee sus propios casos asignados (Operación Read Estricta)
+        $stmt = $pdo->prepare("SELECT * FROM casos WHERE cliente_id = ? ORDER BY fecha_creacion DESC");
         $stmt->execute([$user_id]);
-        $mis_casos = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    // 3. DIRECTORIO GLOBAL DE ABOGADOS (Para Admins y Clientes)
-    // Se actualiza automáticamente al leer de la tabla 'usuarios' donde rol = 'abogado'
-    if ($rol === 'admin' || $rol === 'cliente') {
-        $stmt = $pdo->prepare("SELECT id, nombre, email, especialidad FROM usuarios WHERE rol = 'abogado' ORDER BY nombre ASC");
-        $stmt->execute();
-        $todos_los_abogados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $casos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // El cliente también ve los abogados disponibles del bufete por si quiere consultar
+        $abogados = $pdo->query("SELECT nombre, email FROM usuarios WHERE rol = 'abogado'")->fetchAll(PDO::FETCH_ASSOC);
     }
 
 } catch (PDOException $e) {
-    $error_msg = "Error de connexió amb el sistema central.";
+    die("Error crític en el motor de dades del Dashboard: " . $e->getMessage());
+}
+
+// Captura de notificaciones de éxito de acciones CRUD (vienen de eliminar_caso.php o eliminar_abogado.php)
+$mensaje_status = "";
+if (isset($_GET['status'])) {
+    if ($_GET['status'] === 'deleted') $mensaje_status = "L'expedient s'ha eliminat correctament de la base de dades.";
+    if ($_GET['status'] === 'user_deleted') $mensaje_status = "El compte de l'advocat s'ha donat de baixa correctament.";
 }
 ?>
 
@@ -55,162 +59,191 @@ try {
 <html lang="ca">
 <head>
     <meta charset="UTF-8">
-    <title>GBA ADVOS | Corporate Dashboard</title>
+    <title>GBA ADVOS | Panell Principal</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --porsche-blue: #004a99;
-            --negro: #0a0a0a;
-            --gris-card: #141414;
-            --blanco: #ffffff;
-            --border: rgba(255,255,255,0.08);
-        }
-
+        :root { --porsche-blue: #004a99; --negro: #0a0a0a; --blanco: #ffffff; --gris: #111; --rojo: #ff4d4d; --oro: #d4af37; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: var(--negro); color: var(--blanco); line-height: 1.6; }
-
-        header {
-            padding: 20px 5%; background: rgba(0,0,0,0.95);
-            display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
-        }
-        .logo { font-weight: 700; letter-spacing: 5px; text-transform: uppercase; font-size: 1.1rem; }
+        body { font-family: 'Inter', sans-serif; background: var(--negro); color: var(--blanco); padding: 40px; }
+        
+        /* Cabecera Estilo Porsche */
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222; padding-bottom: 20px; margin-bottom: 40px; }
+        .logo { font-weight: 700; letter-spacing: 5px; font-size: 1.4rem; text-transform: uppercase; }
         .logo span { color: var(--porsche-blue); }
+        .user-badge { font-size: 0.8rem; color: #888; }
+        .user-badge strong { color: var(--blanco); }
+        .role-tag { font-size: 0.65rem; font-weight: 700; padding: 3px 6px; border-radius: 2px; margin-left: 5px; text-transform: uppercase; vertical-align: middle; }
+        .role-admin { background: rgba(212, 175, 55, 0.1); color: var(--oro); border: 1px solid var(--oro); }
+        .role-abogado { background: rgba(0, 74, 153, 0.1); color: #4da3ff; border: 1px solid var(--porsche-blue); }
+        .role-cliente { background: rgba(40, 167, 69, 0.1); color: #28a745; border: 1px solid #28a745; }
         
-        .btn-logout { 
-            color: var(--blanco); text-decoration: none; font-size: 0.65rem; 
-            border: 1px solid #333; padding: 10px 20px; font-weight: 700;
-            letter-spacing: 2px; transition: 0.3s;
-        }
-        .btn-logout:hover { background: #ff4d4d; border-color: #ff4d4d; }
+        .btn-logout { color: var(--rojo); text-decoration: none; font-weight: 700; margin-left: 20px; border: 1px solid var(--rojo); padding: 6px 12px; font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase; transition: 0.3s; }
+        .btn-logout:hover { background: var(--rojo); color: white; }
 
-        .container { padding: 60px 8%; max-width: 1600px; margin: 0 auto; }
-        .welcome { margin-bottom: 40px; border-left: 4px solid var(--porsche-blue); padding-left: 20px; }
-        .welcome span { color: var(--porsche-blue); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 3px; font-weight: 700; }
-        .welcome h1 { font-size: 2.5rem; font-weight: 300; }
-
-        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-        @media (max-width: 1100px) { .dashboard-grid { grid-template-columns: 1fr; } }
-
-        .card { background: var(--gris-card); padding: 35px; border: 1px solid var(--border); height: 100%; }
-        .card h3 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 3px; color: #555; margin-bottom: 25px; border-bottom: 1px solid #222; padding-bottom: 10px; }
-
-        /* LISTADOS */
-        .list-item { 
-            padding: 20px; background: rgba(255,255,255,0.02); 
-            border-left: 2px solid var(--porsche-blue); margin-bottom: 12px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .item-info h4 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
-        .item-info p { font-size: 0.8rem; color: #777; }
+        /* Estructura en Grid */
+        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 40px; }
+        .main-panel { display: flex; flex-direction: column; gap: 30px; }
+        .card { background: var(--gris); border: 1px solid #222; padding: 30px; border-radius: 4px; position: relative; }
+        .card h3 { font-weight: 300; letter-spacing: 2px; margin-bottom: 25px; text-transform: uppercase; font-size: 1.1rem; border-left: 3px solid var(--porsche-blue); padding-left: 10px; }
         
-        .badge { font-size: 0.6rem; padding: 4px 10px; background: #222; border-radius: 2px; text-transform: uppercase; letter-spacing: 1px; }
-
-        /* BOTONES PORSCHE */
-        .btn-action {
-            display: block; width: 100%; padding: 18px; background: var(--blanco);
-            color: var(--negro); text-align: center; text-decoration: none; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 2px; font-size: 0.7rem; 
-            margin-top: 20px; transition: 0.4s; border: none;
-        }
+        /* Botones de acción generales */
+        .btn-action { display: inline-block; background: var(--blanco); color: var(--negro); text-decoration: none; padding: 12px 24px; font-weight: 700; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; border: none; transition: 0.3s; cursor: pointer; }
         .btn-action:hover { background: var(--porsche-blue); color: var(--blanco); }
+        .btn-admin-db { background: var(--oro); color: black; }
+        .btn-admin-db:hover { background: white; color: black; }
 
-        .admin-link { background: transparent; border: 1px solid #333; color: white; margin-top: 10px; }
+        /* Listas y Tablas Dark */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #161616; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 2px; color: #555; padding: 15px 20px; text-align: left; border-bottom: 1px solid #222; }
+        td { padding: 15px 20px; font-size: 0.85rem; border-bottom: 1px solid #1a1a1a; color: #ccc; }
+        tr:hover td { color: #fff; background: #151515; }
+
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #1a1a1a; }
+        .item-row:last-child { border: none; }
+
+        /* Botones de operaciones de fila (CRUD) */
+        .btn-crud { text-decoration: none; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 5px 10px; border: 1px solid; margin-left: 8px; transition: 0.3s; display: inline-block; }
+        .btn-crud-edit { color: #4da3ff; border-color: #4da3ff; }
+        .btn-crud-edit:hover { background: #4da3ff; color: black; }
+        .btn-crud-delete { color: var(--rojo); border-color: var(--rojo); }
+        .btn-crud-delete:hover { background: var(--rojo); color: white; }
+
+        .alert-success { background: rgba(0, 74, 153, 0.1); color: #4da3ff; border: 1px solid var(--porsche-blue); padding: 15px; text-align: center; font-size: 0.85rem; margin-bottom: 30px; }
+        .no-data { color: #444; font-size: 0.85rem; padding: 20px 0; }
     </style>
 </head>
 <body>
 
-<header>
-    <div class="logo">GBA<span>.</span>ADVOS</div>
-    <a href="logout.php" class="btn-logout">CERRAR SESIÓN</a>
-</header>
-
-<div class="container">
-    <div class="welcome">
-        <span>Àrea de Gestió | <?= strtoupper($rol) ?></span>
-        <h1>Benvingut, <?= $nom ?></h1>
+    <div class="header">
+        <div class="logo">GBA<span>.</span>ADVOS</div>
+        <div class="user-badge">
+            Usuari: <strong><?= htmlspecialchars($nom_usuari) ?></strong> 
+            <span class="role-tag role-<?= $rol ?>"><?= $rol ?></span>
+            <a href="logout.php" class="btn-logout">Tancar Sessió</a>
+        </div>
     </div>
+
+    <?php if ($mensaje_status): ?>
+        <div class="alert-success"><?= $mensaje_status ?></div>
+    <?php endif; ?>
 
     <div class="dashboard-grid">
         
-        <!-- COLUMNA IZQUIERDA: CASOS (Para Abogados y Clientes) -->
-        <div class="column">
-            <?php if ($rol !== 'admin'): ?>
+        <div class="main-panel">
+
+            <?php if ($rol === 'admin'): ?>
+                <div class="card" style="border-color: rgba(212, 175, 55, 0.3);">
+                    <h3 style="border-left-color: var(--oro); color: var(--oro);">Herramientas Estructurales de Infraestructura</h3>
+                    <p style="font-size: 0.85rem; color: #888; margin-bottom: 20px;">Acceso restringido directo al motor de datos relacional para auditorías de la base de datos PHP_GBA.</p>
+                    <a href="http://localhost/phpmyadmin/index.php?route=/database/structure&server=1&db=PHP_GBA" target="_blank" class="btn-action btn-admin-db">Abrir Estructura en phpMyAdmin</a>
+                </div>
+            <?php endif; ?>
+
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3><?= $rol === 'cliente' ? 'Els Meus Expedients Contractats' : 'Gestió Global d\'Expedients' ?></h3>
+                    <?php if ($rol === 'abogado'): ?>
+                        <a href="crear_caso.php" class="btn-action" style="padding: 8px 16px; font-size: 0.65rem;">+ Crear Nou Cas</a>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (count($casos) > 0): ?>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ref. Expedient</th>
+                                <th>Títol del Procediment</th>
+                                <th>Àrea</th>
+                                <th>Estat</th>
+                                <?php if ($rol !== 'cliente'): ?>
+                                    <th style="text-align: right;">Accions</th>
+                                <?php endif; ?>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($casos as $c): ?>
+                                <tr>
+                                    <td style="font-weight: 600; color: #fff;"><?= htmlspecialchars($c['num_expedient']) ?></td>
+                                    <td><?= htmlspecialchars($c['titulo']) ?></td>
+                                    <td><?= htmlspecialchars($c['area_dret']) ?></td>
+                                    <td><span style="color: #4da3ff; font-size: 0.8rem;"><?= htmlspecialchars($c['estado']) ?></span></td>
+                                    
+                                    <?php if ($rol !== 'cliente'): ?>
+                                        <td style="text-align: right;">
+                                            <?php if ($rol === 'abogado'): ?>
+                                                <a href="editar_caso.php?id=<?= $c['id'] ?>" class="btn-crud btn-crud-edit">Editar</a>
+                                                <a href="eliminar_caso.php?id=<?= $c['id'] ?>" class="btn-crud btn-crud-delete" onclick="return confirm('Segur que vols eliminar permanentment aquest cas?');">Eliminar</a>
+                                            <?php elseif ($rol === 'admin'): ?>
+                                                <a href="eliminar_caso.php?id=<?= $c['id'] ?>" class="btn-crud btn-crud-delete" onclick="return confirm('ADMIN: Segur que vols purgar aquest cas del sistema?');">Purgar Cas</a>
+                                            <?php endif; ?>
+                                        </td>
+                                    <?php endif; ?>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php else: ?>
+                    <p class="no-data">No s'han trobat expedients judicials en aquest apartat.</p>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($rol === 'admin' || $rol === 'cliente'): ?>
                 <div class="card">
-                    <h3>Expedients Actius</h3>
-                    <?php if (empty($mis_casos)): ?>
-                        <p style="color: #444;">No s'han trobat casos assignats al seu perfil.</p>
-                    <?php else: ?>
-                        <?php foreach ($mis_casos as $caso): ?>
-                            <div class="list-item">
-                                <div class="item-info">
-                                    <h4><?= htmlspecialchars($caso['titulo']) ?></h4>
-                                    <p>ID: <?= htmlspecialchars($caso['num_expedient']) ?> | <?= ($rol === 'abogado') ? 'Client: ' . $caso['cliente_nombre'] : 'Advocat: ' . $caso['abogado_nombre'] ?></p>
+                    <h3><?= $rol === 'admin' ? 'Panell de Comptes de Lletrats' : 'Advocats de la Firma Disponibles' ?></h3>
+                    <?php if (count($abogados) > 0): ?>
+                        <?php foreach ($abogados as $ab): ?>
+                            <div class="item-row">
+                                <div>
+                                    <strong><?= htmlspecialchars($ab['nombre']) ?></strong><br>
+                                    <span style="font-size: 0.8rem; color: #666;"><?= htmlspecialchars($ab['email']) ?></span>
                                 </div>
-                                <span class="badge"><?= htmlspecialchars($caso['estado']) ?></span>
+                                <div>
+                                    <?php if ($rol === 'admin'): ?>
+                                        <a href="eliminar_abogado.php?id=<?= $ab['id'] ?>" class="btn-crud btn-crud-delete" onclick="return confirm('ADMIN: Segur que vols revocar l\'accés i eliminar el compte d\'aquest advocat?');">Donar de Baixa</a>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         <?php endforeach; ?>
+                    <?php else: ?>
+                        <p class="no-data">No hi ha advocats registrats en el sistema.</p>
                     <?php endif; ?>
+                </div>
+            <?php endif; ?>
 
+        </div>
+
+        <div class="sidebar">
+            
+            <div class="card">
+                <h3><?= $rol === 'abogado' ? 'La Meva Agenda de Judicis' : 'Notificacions de la Firma' ?></h3>
+                <p style="font-size: 0.8rem; color: #555; line-height: 1.6;">
                     <?php if ($rol === 'abogado'): ?>
-                        <a href="crear_caso.php" class="btn-action">Registrar Nou Cas</a>
+                        - **Avui 10:00h**: Vista prèvia al Jutjat del Social de Barcelona (Exp. GBA-2026-1102).<br>
+                        - **Demà 12:30h**: Reunió de mediació amb la contrapart en sala de juntes.
+                    <?php else: ?>
+                        Benvingut al sistema central de comunicacions de GBA ADVOS. El canal de dades entre el navegador i el nostre servidor es troba completament xifrat sota protocols actius SSL/HTTPS per a la seva seguretat.
+                    <?php endif; ?>
+                </p>
+            </div>
+
+            <?php if ($rol === 'abogado'): ?>
+                <div class="card">
+                    <h3>Clients de la Firma</h3>
+                    <?php if (count($clientes) > 0): ?>
+                        <?php foreach ($clientes as $cli): ?>
+                            <div style="padding: 10px 0; border-bottom: 1px solid #1c1c1c; font-size: 0.85rem;">
+                                <strong><?= htmlspecialchars($cli['nombre']) ?></strong><br>
+                                <span style="color: #555; font-size: 0.75rem;"><?= htmlspecialchars($cli['email']) ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p class="no-data">No hi ha clients en la base de dades.</p>
                     <?php endif; ?>
                 </div>
-            <?php else: ?>
-                <!-- VISTA ESPECIAL ADMIN: ACCESO DB -->
-                <div class="card">
-                    <h3>Infraestructura de Dades</h3>
-                    <p style="font-size: 0.9rem; color: #888; margin-bottom: 20px;">Control total del motor MySQL GBA_ADVOS. Accediu per a manteniment de taules o auditories.</p>
-                    <a href="http://localhost/phpmyadmin/index.php?db=PHP_GBA" target="_blank" class="btn-action">Obrir phpMyAdmin</a>
-                    <a href="#" class="btn-action admin-link">Registres del Servidor</a>
-                </div>
             <?php endif; ?>
-        </div>
 
-        <!-- COLUMNA DERECHA: DIRECTORIO DE ABOGADOS (Para Clientes y Admin) -->
-        <div class="column">
-            <?php if ($rol === 'cliente' || $rol === 'admin'): ?>
-                <div class="card">
-                    <h3>Plantilla d'Advocats Actius</h3>
-                    <p style="font-size: 0.75rem; color: #555; margin-bottom: 15px;">Aquesta llista s'actualitza en temps real amb les noves incorporacions de la firma.</p>
-                    
-                    <?php foreach ($todos_los_abogados as $abogado): ?>
-                        <div class="list-item">
-                            <div class="item-info">
-                                <h4><?= htmlspecialchars($abogado['nombre']) ?></h4>
-                                <p><?= htmlspecialchars($abogado['especialidad'] ?? 'Especialista Jurídic') ?></p>
-                                <p style="color: var(--porsche-blue); margin-top: 5px;"><?= htmlspecialchars($abogado['email']) ?></p>
-                            </div>
-                            <span class="badge" style="color: #00cc66;">ACTIU</span>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php else: ?>
-                <!-- VISTA ESPECIAL ABOGADO: AGENDA -->
-                <div class="card">
-                    <h3>Agenda de Judicis i Cites</h3>
-                    <div class="list-item">
-                        <div class="item-info">
-                            <h4>Reunió de Proves</h4>
-                            <p>Demà - 09:00h | Sala 3</p>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="item-info">
-                            <h4>Vista Oral #4402</h4>
-                            <p>02 Maig - 11:30h | Jutjat Civil</p>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
         </div>
-
     </div>
-</div>
-
-<footer style="padding: 40px; text-align: center; color: #222; font-size: 0.6rem; letter-spacing: 2px;">
-    GBA ADVOS CORPORATE PERFORMANCE &copy; 2026
-</footer>
 
 </body>
 </html>
